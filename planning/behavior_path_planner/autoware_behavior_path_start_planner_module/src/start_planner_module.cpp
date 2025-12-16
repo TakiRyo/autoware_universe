@@ -299,6 +299,15 @@ void StartPlannerModule::updateData()
       status_.pull_out_start_pose = freespace_status.pull_out_start_pose;
       status_.planner_type = freespace_status.planner_type;
       status_.found_pull_out_path = freespace_status.found_pull_out_path;
+
+      // // taki change
+      // RCLCPP_INFO(
+      //   getLogger(), 
+      //   "\033[31m[DEBUG] START PLANNER: found_pull_out_path = %s \033[0m", 
+      //   status_.found_pull_out_path ? "TRUE" : "FALSE"
+      // );
+      // nothig related 
+
       status_.driving_forward = freespace_status.driving_forward;
       // and then reset it
       freespace_thread_status_ = std::nullopt;
@@ -488,8 +497,14 @@ bool StartPlannerModule::isExecutionRequested() const
   // - The vehicle has already arrived at the start position planner.
   // - The vehicle has reached the goal position.
   // - The vehicle is still moving.
-  if (
-    isCurrentPoseOnEgoCenterline() || isCloseToOriginalStartPose() || hasArrivedAtGoal() ||
+  // if (
+  //   isCurrentPoseOnEgoCenterline() || isCloseToOriginalStartPose() || hasArrivedAtGoal() ||
+  //   isMoving()) {
+  //   return false;
+  // }
+
+  if(
+    // isCurrentPoseOnEgoCenterline() || isCloseToOriginalStartPose() || hasArrivedAtGoal() ||
     isMoving()) {
     return false;
   }
@@ -798,6 +813,7 @@ bool StartPlannerModule::isExecutionReady() const
     stop_pose_ = PoseWithDetail(planner_data_->self_odometry->pose.pose, stop_reason);
   }
 
+  // is_safe = true; 
   return is_safe;
 }
 
@@ -825,6 +841,11 @@ bool StartPlannerModule::canTransitSuccessState()
   if (!status_.driving_forward || !status_.found_pull_out_path) {
     return false;
   }
+
+  // // taki/change: even the car can't find path return true
+  //   if (!status_.driving_forward) {
+  //   return true;
+  // }
 
   if (hasReachedPullOutEnd()) {
     RCLCPP_DEBUG(getLogger(), "Transit to success: Reached the end point of the pullout path.");
@@ -1954,6 +1975,8 @@ std::optional<PullOutStatus> StartPlannerModule::planFreespacePath(
     status.found_pull_out_path = true;
     status.driving_forward = true;
     return std::make_optional<PullOutStatus>(status);
+
+    //careful here. 
   }
 
   return std::nullopt;
