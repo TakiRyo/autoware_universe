@@ -489,7 +489,7 @@ bool StartPlannerModule::isExecutionRequested() const
   // - The vehicle has reached the goal position.
   // - The vehicle is still moving.
   if (
-    // isCurrentPoseOnEgoCenterline() || isCloseToOriginalStartPose() || hasArrivedAtGoal() ||
+    isCurrentPoseOnEgoCenterline() || isCloseToOriginalStartPose() || hasArrivedAtGoal() ||
     isMoving()) {
     return false;
   }
@@ -509,6 +509,7 @@ bool StartPlannerModule::isModuleRunning() const
   return getCurrentStatus() == ModuleStatus::RUNNING;
 }
 
+// check car is center or not. 
 bool StartPlannerModule::isCurrentPoseOnEgoCenterline() const
 {
   const auto & lanelet_map_ptr = planner_data_->route_handler->getLaneletMapPtr();
@@ -1234,7 +1235,7 @@ void StartPlannerModule::planWithPriority(
           debug_data_.margin_for_start_pose_candidate = collision_check_margin;
           set_planner_evaluation_table(debug_data_vector);
           // RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] if findPullPutPath \033[0m");
-          RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] if findPullPutPath \033[0m");
+          RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] if findPullPutPath (green) \033[0m");
           return;
         }
       }
