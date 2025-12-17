@@ -843,6 +843,7 @@ bool StartPlannerModule::isExecutionReady() const
 
 bool StartPlannerModule::canTransitSuccessState()
 {
+
   // Freespace Planner:
   // - Can transit to success if the goal position is reached.
   // - Cannot transit to success if the goal position is not reached.
@@ -850,9 +851,108 @@ bool StartPlannerModule::canTransitSuccessState()
     if (hasReachedFreespaceEnd()) {
       RCLCPP_DEBUG(
         getLogger(), "Transit to success: Freespace planner reached the end point of the path.");
-      return true;
+      // return true;
     }
     return false;
+  }
+
+  // // IfPlannerType is GEOMETRIC and ego is on centerline, consider it success.
+  // if (status_.planner_type == PlannerType::GEOMETRIC) {
+  //   if (isCurrentPoseOnEgoCenterline()) {
+  //     RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] success Transit \033[0m");;
+  //     return true;
+  //   }
+  // }
+
+  // // IfPlannerType is GEOMETRIC and ego is on centerline, consider it success.
+  // if (status_.planner_type == PlannerType::GEOMETRIC) {
+    
+  //   const auto planned_start_point = status_.pull_out_path.start_pose.position;
+  //   const auto current_point = planner_data_->self_odometry->pose.pose.position;
+
+  //   const double distance_from_start = autoware_utils::calc_distance2d(planned_start_point, current_point);
+
+  //   if (isCurrentPoseOnEgoCenterline() && distance_from_start > 30.0) {
+      
+  //     RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), 
+  //         "\033[32m[DEBUG] success Transit! Dist: %.2f m \033[0m", distance_from_start);
+  //     return true;
+  //   }
+  // }
+
+  // // IfPlannerType is GEOMETRIC
+  // if (status_.planner_type == PlannerType::GEOMETRIC) {
+    
+  //   const auto goal_pose = status_.pull_out_path.points.back().point.pose;
+  //   const auto current_pose = planner_data_->self_odometry->pose.pose;
+
+  //   // 2. ゴールまでの距離を計算
+  //   const double distance_to_goal = autoware_utils::calc_distance2d(
+  //       goal_pose.position, current_pose.position);
+
+  //   // 3. ゴールまでの角度のズレ（Yaw差）も見る（オプションだが推奨）
+  //   // 車がちゃんと前を向いているか確認するため
+  //   const double yaw_diff = std::abs(autoware_utils::normalize_radian(
+  //       tf2::getYaw(goal_pose.orientation) - tf2::getYaw(current_pose.orientation)));
+
+  //   // ▼ 判定条件: 
+  //   // 「ゴールまであと 1.0m 以内」 かつ 「角度ズレが 15度 (約0.26rad) 以内」
+  //   // ※ 5m進んだかどうかのチェックはこの中に含まれるので不要になります
+  //   if (yaw_diff < 0.26) {
+      
+  //     RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), 
+  //         "\033[32m[DEBUG] Finished! Dist to Goal: %.2f m, YawDiff: %.2f \033[0m", 
+  //         distance_to_goal, yaw_diff);
+  //     return true;
+  //   }
+  // }
+
+  // IfPlannerType is GEOMETRIC
+  if (status_.planner_type == PlannerType::GEOMETRIC) {
+
+    // --- 1. 必要な情報の取得 ---
+    // 計画された開始地点 (Geometric Pull Out Start Point)
+    const auto start_pose = status_.pull_out_path.start_pose;
+    // 現在地
+    const auto current_pose = planner_data_->self_odometry->pose.pose;
+    
+    // --- 2. 条件チェック ---
+
+    // ① 開始地点からの移動距離が 30.0m 以上か？
+    const double distance_from_start = autoware_utils::calc_distance2d(
+        start_pose.position, current_pose.position);
+    
+    const bool is_distance_ok = distance_from_start > 25.0;
+
+    // ② 車線中心線上にいるか？
+    // (以前使っていた関数をそのまま利用)
+    const bool is_on_centerline = isCurrentPoseOnEgoCenterline();
+
+    // ③ ヨー角（向き）が開始地点またはゴール地点と同じか？ (許容誤差 15度 = 0.26rad)
+    // ※ start_pose と同じ向き、または goal_pose と同じ向きならOKとします
+    const double yaw_current = tf2::getYaw(current_pose.orientation);
+    const double yaw_start = tf2::getYaw(start_pose.orientation);
+    
+    // ゴール地点の向きも取得 (念のためパスが存在するか確認)
+    double yaw_goal = yaw_start; // デフォルトはスタートと同じにしておく
+    if (!status_.pull_out_path.partial_paths.empty()) {
+        yaw_goal = tf2::getYaw(status_.pull_out_path.partial_paths.back().points.back().point.pose.orientation);
+    }
+
+    const double yaw_diff_start = std::abs(autoware_utils::normalize_radian(yaw_current - yaw_start));
+    const double yaw_diff_goal = std::abs(autoware_utils::normalize_radian(yaw_current - yaw_goal));
+    
+    // どちらか一方と向きが合っていればOK
+    const bool is_yaw_ok = (yaw_diff_start < 0.26) || (yaw_diff_goal < 0.26);
+
+    // --- 3. 判定とログ出力 ---
+    if (is_distance_ok && is_on_centerline && is_yaw_ok) {
+      
+      RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), 
+          "\033[32m[DEBUG] Transit Success! Dist: %.2f(>25), Center: YES, YawDiff(Goal): %.2f \033[0m", 
+          distance_from_start, yaw_diff_goal);
+      return true;
+    }
   }
 
   // Other Planners:
@@ -868,9 +968,8 @@ bool StartPlannerModule::canTransitSuccessState()
 
   if (hasReachedPullOutEnd()) {
     RCLCPP_DEBUG(getLogger(), "Transit to success: Reached the end point of the pullout path.");
-    return true;
+    // return true;
   }
-
   return false;
 }
 

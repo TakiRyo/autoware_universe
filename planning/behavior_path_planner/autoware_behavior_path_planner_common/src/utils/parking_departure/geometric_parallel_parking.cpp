@@ -237,7 +237,7 @@ bool GeometricParallelParking::planPullOut(
        end_pose_offset += offset_interval) {
     // pull_out end pose which is the second arc path end
     // const auto end_pose = calcStartPose(start_pose, road_lanes, end_pose_offset, R_E_min_, is_forward, left_side_start);
-    const std::optional<Pose> end_pose = calc_offset_pose(start_pose, 20.0, -3.5, 0);
+    const std::optional<Pose> end_pose = calc_offset_pose(start_pose, 15.0, -3.5, 0);
     // const std::optional<Pose> end_pose = calc_offset_pose(start_pose, end_pose_offset, -3.4, 0);
     
     if (!end_pose) {
