@@ -237,14 +237,14 @@ bool GeometricParallelParking::planPullOut(
        end_pose_offset += offset_interval) {
     // pull_out end pose which is the second arc path end
     // const auto end_pose = calcStartPose(start_pose, road_lanes, end_pose_offset, R_E_min_, is_forward, left_side_start);
-    const std::optional<Pose> end_pose = calc_offset_pose(start_pose, 15.0, -4.0, 0);
+    const std::optional<Pose> end_pose = calc_offset_pose(start_pose, 20.0, -3.5, 0);
     // const std::optional<Pose> end_pose = calc_offset_pose(start_pose, end_pose_offset, -3.4, 0);
     
     if (!end_pose) {
       continue;
     }
 
-    RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[31m[DEBUG] end pose offset \033[0m");
+    RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[32m[DEBUG] end pose offset \033[0m");
 
     // plan reverse path of parking. end_pose <-> start_pose
     auto arc_paths = planOneTrial(
@@ -255,7 +255,7 @@ bool GeometricParallelParking::planPullOut(
       // not found path
       continue;
     }
-    RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[31m[DEBUG] end arc paths \033[0m");
+    RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[32m[DEBUG] end arc paths \033[0m");
 
     // reverse to turn_right -> turn_left
     std::reverse(arc_paths.begin(), arc_paths.end());
@@ -273,7 +273,8 @@ bool GeometricParallelParking::planPullOut(
     }
 
     // get road center line path from pull_out end to goal, and combine after the second arc path
-    const double s_start = getArcCoordinates(road_lanes, *end_pose).length;
+    // s_start + offset. 
+    const double s_start = getArcCoordinates(road_lanes, *end_pose).length + 5.0;
     const auto path_end_info = utils::parking_departure::calcEndArcLength(
       s_start, planner_data_->parameters.forward_path_length, road_lanes, goal_pose);
     const double s_end = path_end_info.first;
@@ -286,7 +287,7 @@ bool GeometricParallelParking::planPullOut(
       continue;
     }
 
-    RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[31m[DEBUG] end center line path \033[0m");
+    RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[32m[DEBUG] end center line path \033[0m");
 
     // // check the continuity of straight path and arc path
     // const Pose & road_path_first_pose = road_center_line_path.points.front().point.pose;
@@ -320,7 +321,7 @@ bool GeometricParallelParking::planPullOut(
     arc_paths_ = arc_paths;
     paths_ = paths;
 
-    RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[31m[DEBUG] PullOut Success \033[0m");
+    RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[32m[DEBUG] PullOut Success \033[0m");
 
     return true;
   }
@@ -393,7 +394,7 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
   const std::shared_ptr<autoware::boundary_departure_checker::BoundaryDepartureChecker>
     lane_departure_checker)
 {
-  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[31m[DEBUG] start one trial func. \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[32m[DEBUG] start one trial func. \033[0m");
   clearPaths();
 
   const auto & common_params = planner_data_->parameters;
@@ -421,7 +422,7 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
   if (R_E_near <= 0) {
     // return std::vector<PathWithLaneId>{};
   }
-  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[31m[DEBUG] first if one trial func. \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[32m[DEBUG] first if one trial func. \033[0m");
 
 
   // combine road and shoulder lanes
@@ -436,7 +437,7 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
     lanes.push_back(lane);
   }
   lanes.insert(lanes.end(), pull_over_lanes.begin(), pull_over_lanes.end());
-  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[31m[DEBUG] second if one trial func. \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[32m[DEBUG] second if one trial func. \033[0m");
 
   // If start_pose is parallel to goal_pose, we can know lateral deviation of edges of vehicle,
   // and detect lane departure.
@@ -451,7 +452,7 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
   if (std::abs(distance_to_near_bound) - near_deviation < lane_departure_margin) {
     // return std::vector<PathWithLaneId>{};
   }
-  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[31m[DEBUG] 3 if one trial func. \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[32m[DEBUG] 3 if one trial func. \033[0m");
   // Check road lane bound
   const double R_far_corner = std::hypot(
     R_E_near + common_params.vehicle_width / 2,
@@ -463,7 +464,7 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
     // return std::vect
     // or<PathWithLaneId>{};
   }
-  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[31m[DEBUG] 4 if one trial func. \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[32m[DEBUG] 4 if one trial func. \033[0m");
   // Generate arc path(first turn -> second turn)
   const Pose C_near = left_side_parking ? calc_offset_pose(start_pose, 0, R_E_near, 0)
                                         : calc_offset_pose(start_pose, 0, -R_E_near, 0);
@@ -504,7 +505,7 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
     straight_point.point.pose = goal_pose;
     path_turn_second.points.push_back(straight_point);
   }
-  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[31m[DEBUG] middle if one trial func. \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[32m[DEBUG] middle if one trial func. \033[0m");
 
   // Populate lane ids for a given path.
   // It checks if each point in the path is within a lane
@@ -574,7 +575,7 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
   Cr_ = left_side_parking ? C_far : C_near;
   Cl_ = left_side_parking ? C_near : C_far;
 
-  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[31m[DEBUG] end of one trial func. \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("geometric_parallel_parking"), "\033[32m[DEBUG] end of one trial func. \033[0m");
 
   return paths_;
 }

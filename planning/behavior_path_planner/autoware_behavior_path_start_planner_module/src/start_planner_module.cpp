@@ -17,6 +17,7 @@
 #include "autoware/behavior_path_planner_common/utils/parking_departure/utils.hpp"
 #include "autoware/behavior_path_planner_common/utils/path_safety_checker/objects_filtering.hpp"
 #include "autoware/behavior_path_planner_common/utils/path_safety_checker/path_safety_checker_parameters.hpp"
+#include "autoware/behavior_path_planner_common/utils/path_safety_checker/safety_check.hpp"
 #include "autoware/behavior_path_planner_common/utils/path_utils.hpp"
 #include "autoware/behavior_path_start_planner_module/util.hpp"
 #include "autoware/motion_utils/trajectory/trajectory.hpp"
@@ -488,9 +489,41 @@ bool StartPlannerModule::isExecutionRequested() const
   // - The vehicle has already arrived at the start position planner.
   // - The vehicle has reached the goal position.
   // - The vehicle is still moving.
-  if (
-    isCurrentPoseOnEgoCenterline() || isCloseToOriginalStartPose() || hasArrivedAtGoal() ||
-    isMoving()) {
+  // if (
+  //   isCurrentPoseOnEgoCenterline() || isCloseToOriginalStartPose() || hasArrivedAtGoal() ||
+  //   isMoving()) {
+  //   return false;
+  // }
+  
+  //stop
+  if (isMoving()){
+    return false;
+  }
+  //in the center
+  if (!isCurrentPoseOnEgoCenterline()){
+    return false;
+  }
+  // if there is an object in front of the ego vehicle, request execution (return true)
+  // otherwise do not request execution (return false)
+  bool front_object = false;
+  if (planner_data_->dynamic_object && !planner_data_->dynamic_object->objects.empty()) {
+    const auto & ego_pose = planner_data_->self_odometry->pose.pose;
+    for (const auto & obj : planner_data_->dynamic_object->objects) {
+      const auto obj_poly = autoware_utils::to_polygon2d(
+        obj.kinematics.initial_pose_with_covariance.pose, obj.shape);
+      if (autoware::behavior_path_planner::utils::path_safety_checker::isTargetObjectFront(
+            ego_pose, obj_poly, vehicle_info_.max_longitudinal_offset_m)) {
+        front_object = true;
+        RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] front object \033[0m");
+        break;  // found one, no need to check further
+      }
+    }
+  } else {
+    // no dynamic objects -> no front object
+    return false;
+  }
+
+  if (!front_object) {
     return false;
   }
 
@@ -758,15 +791,15 @@ bool StartPlannerModule::isExecutionReady() const
   // Evaluate safety. The situation is not safe if any of the following conditions are met:
   // 1. pull out path has not been found
   // 2. waiting for approval, AND any of the following conditions:
-  //    a. there are moving objects around ego
+  //    a. there are moving objects around
   //    b. there is a collision with dynamic objects (if collision detection is required)
-  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] start of isExecutionReady \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] start of isExecutionReady \033[0m");
   bool is_safe = true;
   std::string stop_reason = "";
   // Check pull out path
   if (!status_.found_pull_out_path) {
     is_safe = false;
-    RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 1 false isExecutionReady \033[0m");
+    RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] 1 false isExecutionReady \033[0m");
     const bool is_inside_lanelets = isInsideLanelets();
 
     // TODO(Sugahara): Improve error messaging to clearly:
@@ -788,11 +821,11 @@ bool StartPlannerModule::isExecutionReady() const
   } else if (isWaitingApproval()) {
     // Check for moving objects around
     if (!noMovingObjectsAround()) {
-      RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 2 false isExecutionReady \033[0m");
+      RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] 2 false isExecutionReady \033[0m");
       is_safe = false;
       stop_reason = "nearby moving object risk";
     } else if (requiresDynamicObjectsCollisionDetection() && hasCollisionWithDynamicObjects()) {
-      RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 3 false isExecutionReady \033[0m");
+      RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] 3 false isExecutionReady \033[0m");
       is_safe = false;
       stop_reason = "dynamic object risk";
     }
@@ -803,8 +836,8 @@ bool StartPlannerModule::isExecutionReady() const
   }
   
   // is_safe = true;
-  // RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 1 false isExecutionReady \033[0m");
-  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] isExecutionReady (is_safe): %s \033[0m", is_safe ? "TRUE" : "FALSE");
+  // RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] 1 false isExecutionReady \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] isExecutionReady (is_safe): %s \033[0m", is_safe ? "TRUE" : "FALSE");
   return is_safe;
 }
 
@@ -1210,12 +1243,12 @@ void StartPlannerModule::planWithPriority(
   const Pose & goal_pose, const std::vector<std::string> & priority_list,
   const std::string & search_policy)
 {
-  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] start planwith priority  \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] start planwith priority  \033[0m");
   autoware_utils::ScopedTimeTrack st(__func__, *time_keeper_);
 
   // somehow return here??
   if (start_pose_candidates.empty()) {
-  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 1 return  planWithPriority\033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] 1 return  planWithPriority\033[0m");
   return;
   }
  
@@ -1234,7 +1267,7 @@ void StartPlannerModule::planWithPriority(
           debug_data_.selected_start_pose_candidate_index = index;
           debug_data_.margin_for_start_pose_candidate = collision_check_margin;
           set_planner_evaluation_table(debug_data_vector);
-          // RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] if findPullPutPath \033[0m");
+          // RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] if findPullPutPath \033[0m");
           RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] if findPullPutPath (green) \033[0m");
           return;
         }
@@ -1331,7 +1364,7 @@ bool StartPlannerModule::findPullOutPath(
   debug_data_vector.push_back(debug_data);
   // If no path is found, return false
   if (!pull_out_path) {
-    RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] false geometric path generation  \033[0m");
+    RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] false geometric path generation  \033[0m");
     return false;
   }
   if (backward_is_unnecessary) {
@@ -1340,7 +1373,7 @@ bool StartPlannerModule::findPullOutPath(
   }
 
   updateStatusWithNextPath(*pull_out_path, start_pose_candidate, planner->getPlannerType());
-  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] success geometric path generation  \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] success geometric path generation  \033[0m");
   return true;
 }
 
@@ -1462,7 +1495,7 @@ std::vector<DrivableLanes> StartPlannerModule::generateDrivableLanes(
 void StartPlannerModule::updatePullOutStatus()
 {
   autoware_utils::ScopedTimeTrack st(__func__, *time_keeper_);
-  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] start updatePullOutStatus  \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] start updatePullOutStatus  \033[0m");
 
   // skip updating if enough time has not passed for preventing chattering between back and
   // start_planner
@@ -1472,7 +1505,7 @@ void StartPlannerModule::updatePullOutStatus()
     }
     const auto elapsed_time = (clock_->now() - *last_pull_out_start_update_time_).seconds();
     if (elapsed_time < parameters_->backward_path_update_duration) {
-      RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 1 return updatePullOutStatus  \033[0m");
+      RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] 1 return updatePullOutStatus  \033[0m");
       // return;
     }
   }
@@ -1489,7 +1522,7 @@ void StartPlannerModule::updatePullOutStatus()
   const auto refined_start_pose = calcLongitudinalOffsetPose(
     start_pose_candidates_path.points, planner_data_->self_odometry->pose.pose.position, 0.0);
   if (!refined_start_pose) {
-    RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 2 return updatePullOutStatus  \033[0m");
+    RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] 2 return updatePullOutStatus  \033[0m");
     // return;
   }
   // search pull out start candidates backward
@@ -1512,7 +1545,7 @@ void StartPlannerModule::updatePullOutStatus()
   });
 
   if (!status_.backward_driving_complete && !status_.prev_approved_path) {
-    RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 3 updatePullOutStatus  \033[0m");
+    RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] 3 updatePullOutStatus  \033[0m");
     planWithPriority(
       start_pose_candidates, *refined_start_pose, goal_pose, parameters_->search_priority,
       parameters_->search_policy);
