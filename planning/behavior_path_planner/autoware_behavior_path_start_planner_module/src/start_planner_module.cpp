@@ -299,15 +299,6 @@ void StartPlannerModule::updateData()
       status_.pull_out_start_pose = freespace_status.pull_out_start_pose;
       status_.planner_type = freespace_status.planner_type;
       status_.found_pull_out_path = freespace_status.found_pull_out_path;
-
-      // // taki change
-      // RCLCPP_INFO(
-      //   getLogger(), 
-      //   "\033[31m[DEBUG] START PLANNER: found_pull_out_path = %s \033[0m", 
-      //   status_.found_pull_out_path ? "TRUE" : "FALSE"
-      // );
-      // nothig related 
-
       status_.driving_forward = freespace_status.driving_forward;
       // and then reset it
       freespace_thread_status_ = std::nullopt;
@@ -497,13 +488,7 @@ bool StartPlannerModule::isExecutionRequested() const
   // - The vehicle has already arrived at the start position planner.
   // - The vehicle has reached the goal position.
   // - The vehicle is still moving.
-  // if (
-  //   isCurrentPoseOnEgoCenterline() || isCloseToOriginalStartPose() || hasArrivedAtGoal() ||
-  //   isMoving()) {
-  //   return false;
-  // }
-
-  if(
+  if (
     // isCurrentPoseOnEgoCenterline() || isCloseToOriginalStartPose() || hasArrivedAtGoal() ||
     isMoving()) {
     return false;
@@ -774,12 +759,13 @@ bool StartPlannerModule::isExecutionReady() const
   // 2. waiting for approval, AND any of the following conditions:
   //    a. there are moving objects around ego
   //    b. there is a collision with dynamic objects (if collision detection is required)
-
+  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] start of isExecutionReady \033[0m");
   bool is_safe = true;
   std::string stop_reason = "";
   // Check pull out path
   if (!status_.found_pull_out_path) {
     is_safe = false;
+    RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 1 false isExecutionReady \033[0m");
     const bool is_inside_lanelets = isInsideLanelets();
 
     // TODO(Sugahara): Improve error messaging to clearly:
@@ -801,9 +787,11 @@ bool StartPlannerModule::isExecutionReady() const
   } else if (isWaitingApproval()) {
     // Check for moving objects around
     if (!noMovingObjectsAround()) {
+      RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 2 false isExecutionReady \033[0m");
       is_safe = false;
       stop_reason = "nearby moving object risk";
     } else if (requiresDynamicObjectsCollisionDetection() && hasCollisionWithDynamicObjects()) {
+      RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 3 false isExecutionReady \033[0m");
       is_safe = false;
       stop_reason = "dynamic object risk";
     }
@@ -812,8 +800,10 @@ bool StartPlannerModule::isExecutionReady() const
   if (!is_safe) {
     stop_pose_ = PoseWithDetail(planner_data_->self_odometry->pose.pose, stop_reason);
   }
-
-  // is_safe = true; 
+  
+  // is_safe = true;
+  // RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 1 false isExecutionReady \033[0m");
+  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] isExecutionReady (is_safe): %s \033[0m", is_safe ? "TRUE" : "FALSE");
   return is_safe;
 }
 
@@ -841,11 +831,6 @@ bool StartPlannerModule::canTransitSuccessState()
   if (!status_.driving_forward || !status_.found_pull_out_path) {
     return false;
   }
-
-  // // taki/change: even the car can't find path return true
-  //   if (!status_.driving_forward) {
-  //   return true;
-  // }
 
   if (hasReachedPullOutEnd()) {
     RCLCPP_DEBUG(getLogger(), "Transit to success: Reached the end point of the pullout path.");
@@ -1224,10 +1209,15 @@ void StartPlannerModule::planWithPriority(
   const Pose & goal_pose, const std::vector<std::string> & priority_list,
   const std::string & search_policy)
 {
+  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] start planwith priority  \033[0m");
   autoware_utils::ScopedTimeTrack st(__func__, *time_keeper_);
 
-  if (start_pose_candidates.empty()) return;
-
+  // somehow return here??
+  if (start_pose_candidates.empty()) {
+  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 1 return  planWithPriority\033[0m");
+  return;
+  }
+ 
   const PriorityOrder order_priority =
     determinePriorityOrder(priority_list, search_policy, start_pose_candidates.size());
 
@@ -1243,6 +1233,8 @@ void StartPlannerModule::planWithPriority(
           debug_data_.selected_start_pose_candidate_index = index;
           debug_data_.margin_for_start_pose_candidate = collision_check_margin;
           set_planner_evaluation_table(debug_data_vector);
+          // RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] if findPullPutPath \033[0m");
+          RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[32m[DEBUG] if findPullPutPath \033[0m");
           return;
         }
       }
@@ -1338,6 +1330,7 @@ bool StartPlannerModule::findPullOutPath(
   debug_data_vector.push_back(debug_data);
   // If no path is found, return false
   if (!pull_out_path) {
+    RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] false geometric path generation  \033[0m");
     return false;
   }
   if (backward_is_unnecessary) {
@@ -1346,7 +1339,7 @@ bool StartPlannerModule::findPullOutPath(
   }
 
   updateStatusWithNextPath(*pull_out_path, start_pose_candidate, planner->getPlannerType());
-
+  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] success geometric path generation  \033[0m");
   return true;
 }
 
@@ -1468,6 +1461,7 @@ std::vector<DrivableLanes> StartPlannerModule::generateDrivableLanes(
 void StartPlannerModule::updatePullOutStatus()
 {
   autoware_utils::ScopedTimeTrack st(__func__, *time_keeper_);
+  RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] start updatePullOutStatus  \033[0m");
 
   // skip updating if enough time has not passed for preventing chattering between back and
   // start_planner
@@ -1477,7 +1471,8 @@ void StartPlannerModule::updatePullOutStatus()
     }
     const auto elapsed_time = (clock_->now() - *last_pull_out_start_update_time_).seconds();
     if (elapsed_time < parameters_->backward_path_update_duration) {
-      return;
+      RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 1 return updatePullOutStatus  \033[0m");
+      // return;
     }
   }
   last_pull_out_start_update_time_ = std::make_unique<rclcpp::Time>(clock_->now());
@@ -1492,8 +1487,10 @@ void StartPlannerModule::updatePullOutStatus()
   const PathWithLaneId start_pose_candidates_path = calcBackwardPathFromStartPose();
   const auto refined_start_pose = calcLongitudinalOffsetPose(
     start_pose_candidates_path.points, planner_data_->self_odometry->pose.pose.position, 0.0);
-  if (!refined_start_pose) return;
-
+  if (!refined_start_pose) {
+    RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 2 return updatePullOutStatus  \033[0m");
+    // return;
+  }
   // search pull out start candidates backward
   const std::vector<Pose> start_pose_candidates = std::invoke([&]() -> std::vector<Pose> {
     if (parameters_->enable_back) {
@@ -1514,6 +1511,7 @@ void StartPlannerModule::updatePullOutStatus()
   });
 
   if (!status_.backward_driving_complete && !status_.prev_approved_path) {
+    RCLCPP_WARN(rclcpp::get_logger("start_planner_module"), "\033[31m[DEBUG] 3 updatePullOutStatus  \033[0m");
     planWithPriority(
       start_pose_candidates, *refined_start_pose, goal_pose, parameters_->search_priority,
       parameters_->search_policy);
@@ -1526,7 +1524,7 @@ void StartPlannerModule::updatePullOutStatus()
 
   if (hasFinishedBackwardDriving()) {
     updateStatusAfterBackwardDriving();
-    return;
+    // return;
   }
   status_.backward_path = start_planner_utils::getBackwardPath(
     *route_handler, pull_out_lanes, current_pose, status_.pull_out_start_pose,
@@ -1975,8 +1973,6 @@ std::optional<PullOutStatus> StartPlannerModule::planFreespacePath(
     status.found_pull_out_path = true;
     status.driving_forward = true;
     return std::make_optional<PullOutStatus>(status);
-
-    //careful here. 
   }
 
   return std::nullopt;
