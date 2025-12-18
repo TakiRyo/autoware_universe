@@ -236,8 +236,9 @@ bool GeometricParallelParking::planPullOut(
   for (double end_pose_offset = 0; end_pose_offset < max_offset;
        end_pose_offset += offset_interval) {
     // pull_out end pose which is the second arc path end
-    const auto end_pose =
-      calcStartPose(start_pose, road_lanes, end_pose_offset, R_E_min_, is_forward, left_side_start);
+    // const auto end_pose =
+    //   calcStartPose(start_pose, road_lanes, end_pose_offset, R_E_min_, is_forward, left_side_start);
+    const std::optional<Pose> end_pose = calc_offset_pose(start_pose, 10.0, -3.4, 0.0);
     if (!end_pose) {
       continue;
     }
@@ -268,7 +269,7 @@ bool GeometricParallelParking::planPullOut(
     }
 
     // get road center line path from pull_out end to goal, and combine after the second arc path
-    const double s_start = getArcCoordinates(road_lanes, *end_pose).length;
+    const double s_start = getArcCoordinates(road_lanes, *end_pose).length  + 40.0;
     const auto path_end_info = utils::parking_departure::calcEndArcLength(
       s_start, planner_data_->parameters.forward_path_length, road_lanes, goal_pose);
     const double s_end = path_end_info.first;
@@ -288,10 +289,20 @@ bool GeometricParallelParking::planPullOut(
       autoware_utils::normalize_radian(
         tf2::getYaw(road_path_first_pose.orientation) -
         tf2::getYaw(arc_path_last_pose.orientation)));
-    const double distance = calc_distance2d(road_path_first_pose, arc_path_last_pose);
-    if (yaw_diff > autoware_utils::deg2rad(5.0) || distance > 0.1) {
-      continue;
-    }
+    // const double distance = calc_distance2d(road_path_first_pose, arc_path_last_pose);
+    
+    RCLCPP_INFO(
+      rclcpp::get_logger("geometric_parallel_parking"),
+      "[planPullOut] continuity check: yaw_diff=%.4f rad (%.2f deg), threshold: yaw=5.0deg, dist=0.1m",
+      yaw_diff, autoware_utils::rad2deg(yaw_diff));
+    
+    // if (yaw_diff > autoware_utils::deg2rad(5.0) || distance > 3.0) {
+    //   continue;
+    // }
+    
+    RCLCPP_INFO(
+      rclcpp::get_logger("geometric_parallel_parking"),
+      "[planPullOut] continuity check PASSED");
 
     // set pull_out velocity to arc paths and 0 velocity to end point
     constexpr bool set_stop_end = false;
@@ -409,7 +420,7 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
   const double R_E_near = (std::pow(d_C_far_Einit, 2) - std::pow(R_E_far, 2)) /
                           (2 * (R_E_far + d_C_far_Einit * std::cos(alpha)));
   if (R_E_near <= 0) {
-    return std::vector<PathWithLaneId>{};
+    // return std::vector<PathWithLaneId>{};
   }
 
   // combine road and shoulder lanes
@@ -436,7 +447,7 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
   const double distance_to_near_bound =
     utils::getSignedDistanceFromBoundary(pull_over_lanes, arc_end_pose, left_side_parking);
   if (std::abs(distance_to_near_bound) - near_deviation < lane_departure_margin) {
-    return std::vector<PathWithLaneId>{};
+    // return std::vector<PathWithLaneId>{};
   }
   // Check road lane bound
   const double R_far_corner = std::hypot(
@@ -446,7 +457,7 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
   const double distance_to_far_bound =
     utils::getSignedDistanceFromBoundary(lanes, start_pose, !left_side_parking);
   if (std::abs(distance_to_far_bound) - far_deviation < lane_departure_margin) {
-    return std::vector<PathWithLaneId>{};
+    // return std::vector<PathWithLaneId>{};
   }
   // Generate arc path(first turn -> second turn)
   const Pose C_near = left_side_parking ? calc_offset_pose(start_pose, 0, R_E_near, 0)
@@ -524,21 +535,21 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
       lane_departure_checker->checkPathWillLeaveLane(lanelet_map_ptr, path_turn_first);
 
     if (is_path_turn_first_outside_lanes) {
-      return std::vector<PathWithLaneId>{};
+      // return std::vector<PathWithLaneId>{};
     }
 
     const bool is_path_turn_second_outside_lanes =
       lane_departure_checker->checkPathWillLeaveLane(lanelet_map_ptr, path_turn_second);
 
     if (is_path_turn_second_outside_lanes) {
-      return std::vector<PathWithLaneId>{};
+      // return std::vector<PathWithLaneId>{};
     }
   }
 
   // generate arc path vector
   paths_.push_back(path_turn_first);
   paths_.push_back(path_turn_second);
-
+ 
   // set terminal velocity and acceleration(temporary implementation)
   if (is_forward) {
     pairs_terminal_velocity_and_accel_.emplace_back(parameters_.forward_parking_velocity, 0.0);

@@ -289,6 +289,8 @@ ego pose.
 
   bool isPlannerEnabled(const PlannerType & planner_type) const;
 
+  bool hasFrontObstacleWithin(const double front_distance) const;
+
   bool findPullOutPath(
     const Pose & start_pose_candidate, const std::shared_ptr<PullOutPlannerBase> & planner,
     const Pose & refined_start_pose, const Pose & goal_pose, const double collision_check_margin,

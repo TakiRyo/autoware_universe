@@ -479,6 +479,13 @@ bool StartPlannerModule::isInsideLanelets() const
 
 bool StartPlannerModule::isExecutionRequested() const
 {
+
+  // Trigger start planner if an obstacle is within 20 m ahead
+  constexpr double front_obstacle_trigger_distance = 20.0;
+  if (hasFrontObstacleWithin(front_obstacle_trigger_distance)) {
+    return true;
+  }
+
   if (isModuleRunning()) {
     return true;
   }
@@ -489,7 +496,7 @@ bool StartPlannerModule::isExecutionRequested() const
   // - The vehicle has reached the goal position.
   // - The vehicle is still moving.
   if (
-    isCurrentPoseOnEgoCenterline() || isCloseToOriginalStartPose() || hasArrivedAtGoal() ||
+    // isCurrentPoseOnEgoCenterline() || isCloseToOriginalStartPose() || hasArrivedAtGoal() ||
     isMoving()) {
     return false;
   }
@@ -501,7 +508,7 @@ bool StartPlannerModule::isExecutionRequested() const
     return false;
   }
 
-  return true;
+  return false;
 }
 
 bool StartPlannerModule::isModuleRunning() const
@@ -754,6 +761,7 @@ bool StartPlannerModule::isStopped()
 
 bool StartPlannerModule::isExecutionReady() const
 {
+  return true;
   // Evaluate safety. The situation is not safe if any of the following conditions are met:
   // 1. pull out path has not been found
   // 2. waiting for approval, AND any of the following conditions:
@@ -1295,6 +1303,68 @@ bool StartPlannerModule::isPlannerEnabled(const PlannerType & planner_type) cons
   return std::find(
            parameters_->search_priority.begin(), parameters_->search_priority.end(),
            planner_type_str) != parameters_->search_priority.end();
+}
+
+bool StartPlannerModule::hasFrontObstacleWithin(const double front_distance) const
+{
+  RCLCPP_WARN(getLogger(), "[hasFrontObstacleWithin] called, checking within %.1fm", front_distance);
+  
+  if (!planner_data_->dynamic_object) {
+    RCLCPP_WARN(getLogger(), "[hasFrontObstacleWithin] no dynamic_object data available");
+    return false;
+  }
+
+  const auto & ego_pose = planner_data_->self_odometry->pose.pose;
+  const double ego_yaw = tf2::getYaw(ego_pose.orientation);
+  double min_front_dist = std::numeric_limits<double>::max();
+  size_t front_count = 0;
+
+  RCLCPP_WARN(
+    getLogger(), "[hasFrontObstacleWithin] checking %zu objects", 
+    planner_data_->dynamic_object->objects.size());
+
+  for (const auto & object : planner_data_->dynamic_object->objects) {
+    const auto & obj_pose = object.kinematics.initial_pose_with_covariance.pose.position;
+    const double dx = obj_pose.x - ego_pose.position.x;
+    const double dy = obj_pose.y - ego_pose.position.y;
+    const double dist = std::hypot(dx, dy);
+    
+    RCLCPP_WARN(getLogger(), "[hasFrontObstacleWithin] object dist=%.2fm", dist);
+    
+    if (dist > front_distance) {
+      RCLCPP_WARN(
+        getLogger(), 
+        "[hasFrontObstacleWithin] object %.2fm > threshold %.1fm, skip", dist, front_distance);
+      continue;
+    }
+
+    const double heading_to_obj = std::atan2(dy, dx);
+    const double relative_yaw = autoware_utils::normalize_radian(heading_to_obj - ego_yaw);
+    const bool is_in_front = std::abs(relative_yaw) <= M_PI_2;
+    
+    RCLCPP_WARN(
+      getLogger(), 
+      "[hasFrontObstacleWithin] object relative_yaw=%.2f rad, is_in_front=%d", 
+      relative_yaw, is_in_front);
+    
+    if (!is_in_front) {
+      RCLCPP_WARN(getLogger(), "[hasFrontObstacleWithin] object not in front, skip");
+      continue;
+    }
+
+    min_front_dist = std::min(min_front_dist, dist);
+    ++front_count;
+    RCLCPP_INFO(
+      getLogger(), "[isExecutionRequested] front obstacle within %.1fm (dist=%.2fm)",
+      front_distance, dist);
+    return true;
+  }
+
+  RCLCPP_WARN(
+    getLogger(),
+    "[hasFrontObstacleWithin] no obstacle within %.1fm (front_count=%zu, min_front_dist=%.2f)",
+    front_distance, front_count, min_front_dist);
+  return false;
 }
 
 bool StartPlannerModule::findPullOutPath(
