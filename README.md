@@ -1,4 +1,4 @@
-# Autoware Universe (up to date version)
+# Autoware Universe
 
 ## Welcome to Autoware Universe
 
