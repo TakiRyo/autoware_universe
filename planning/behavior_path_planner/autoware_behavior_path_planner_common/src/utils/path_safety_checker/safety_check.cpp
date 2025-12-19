@@ -76,17 +76,38 @@ bool isTargetObjectOncoming(
   return std::abs(calc_yaw_deviation(vehicle_pose, object_pose)) > angle_threshold;
 }
 
+// bool isTargetObjectFront(
+//   const geometry_msgs::msg::Pose & ego_pose, const Polygon2d & obj_polygon,
+//   const double base_to_front)
+// {
+//   const auto ego_offset_pose = autoware_utils::calc_offset_pose(ego_pose, base_to_front, 0.0, 0.0);
+
+//   // check all edges in the polygon
+//   const auto & obj_polygon_outer = obj_polygon.outer();
+//   for (const auto & obj_edge : obj_polygon_outer) {
+//     const auto obj_point = autoware_utils::create_point(obj_edge.x(), obj_edge.y(), 0.0);
+//     if (autoware_utils::calc_longitudinal_deviation(ego_offset_pose, obj_point) > 0.0) {
+//       return true;
+//     }
+//   }
+
+//   return false;
+// }
+
+
 bool isTargetObjectFront(
   const geometry_msgs::msg::Pose & ego_pose, const Polygon2d & obj_polygon,
   const double base_to_front)
 {
   const auto ego_offset_pose = autoware_utils::calc_offset_pose(ego_pose, base_to_front, 0.0, 0.0);
 
-  // check all edges in the polygon
   const auto & obj_polygon_outer = obj_polygon.outer();
   for (const auto & obj_edge : obj_polygon_outer) {
     const auto obj_point = autoware_utils::create_point(obj_edge.x(), obj_edge.y(), 0.0);
-    if (autoware_utils::calc_longitudinal_deviation(ego_offset_pose, obj_point) > 0.0) {
+    
+    double deviation = autoware_utils::calc_longitudinal_deviation(ego_offset_pose, obj_point);
+
+    if (deviation > 0.0 && deviation < 10.0) {
       return true;
     }
   }
